@@ -4,7 +4,7 @@
   "description": "Discord bot",
   "main": "index.js",
   "scripts": {
-    "start": "concurrently \"node index-new.js\" \"cd ../../discord-admin-dashboard && npm run dev\"",
+    "start": "concurrently \"node index-new.js\" \"cd ..\\..\\discord-admin-dashboard && npm run dev\"",
     "bot": "node index-new.js",
     "build": "npm install"
   },
