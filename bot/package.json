@@ -4,7 +4,8 @@
   "description": "Discord bot",
   "main": "index.js",
   "scripts": {
-    "start": "node index.js"
+    "start": "node index.js",
+    "build": "echo 'No build step required'"
   },
   "dependencies": {
     "discord.js": "^14.14.1",
