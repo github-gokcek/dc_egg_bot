@@ -10,6 +10,9 @@ yarn-error.log*
 .env.development.local
 .env.test.local
 .env.production.local
+bot/.env
+bot/services/firebaseAdmin.js
+bot/services/serviceAccountKey.json
 
 # Logs
 logs
