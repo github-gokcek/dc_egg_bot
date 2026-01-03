@@ -1,15 +1,14 @@
 @echo off
+cd /d "%~dp0"
 echo ========================================
-echo   Discord Bot Admin Dashboard
-echo   Bot + Dashboard Baslatiyor...
+echo DISCORD BOT - HAZIR!
 echo ========================================
 echo.
-
+echo Firebase bilgileri eklendi!
+echo.
+echo [1/2] Bagimliliklar yukleniyor...
+call npm install
+echo.
+echo [2/2] Bot baslatiliyor...
+echo.
 npm start
-
-echo.
-echo ========================================
-echo   Dashboard: http://localhost:5173
-echo   Bot: Discord'a baglanacak
-echo ========================================
-pause
