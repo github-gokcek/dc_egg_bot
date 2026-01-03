@@ -4,11 +4,16 @@
   "description": "Discord bot",
   "main": "index.js",
   "scripts": {
-    "start": "node index.js",
+    "start": "concurrently \"node index-new.js\" \"cd ../../discord-admin-dashboard && npm run dev\"",
+    "bot": "node index-new.js",
     "build": "npm install"
   },
   "dependencies": {
     "discord.js": "^14.14.1",
-    "dotenv": "^16.3.1"
+    "dotenv": "^16.3.1",
+    "firebase-admin": "^13.6.0"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1"
   }
 }
