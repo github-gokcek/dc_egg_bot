@@ -3,6 +3,9 @@ const { EmbedBuilder } = require('discord.js');
 // Aktif TFT oyunları
 const activeTftGames = new Map();
 
+// Kullanıcı cooldown sistemi (spam önleme)
+const userCooldowns = new Map();
+
 // TFT oyunu oluştur
 async function createTftGame(message) {
     console.log('🔍 TFT createTftGame fonksiyonu çalıştı');
@@ -79,16 +82,63 @@ async function createTftGame(message) {
     
     activeTftGames.set(gameId, game);
     
-    // TFT rolünü etiketle
+    // TFT maç kaydı oluştur
+    const { getTftMatchesData, saveTftLeagueData } = require('../utils/dataManager');
+    const tftMatchesData = getTftMatchesData();
+    tftMatchesData[gameId] = {
+        id: gameId,
+        players: [],
+        placements: [],
+        timestamp: new Date().toISOString(),
+        completed: false,
+        gameType: gameType || 'unknown',
+        timeInfo: timeInfo
+    };
+    require('../utils/dataManager').setTftMatchesData(tftMatchesData);
+    require('../utils/dataManager').saveMatchesData();
+    
+    // TFT rolüne sahip kullanıcılara DM gönder
     const guild = message.guild;
     const tftRole = guild.roles.cache.find(r => r.name === 'TFT');
-    let roleText = '';
+    
     if (tftRole) {
-        roleText = `${tftRole} `;
+        const tftMembers = tftRole.members;
+        console.log(`📬 ${tftMembers.size} TFT üyesine DM gönderiliyor...`);
+        
+        const dmEmbed = new EmbedBuilder()
+            .setTitle('♟️ **YENİ TFT OYUNU** ♟️')
+            .setDescription(`🎮 **${message.author.username}** yeni bir TFT oyunu oluşturdu!\n\n` +
+                           `🕐 **Zaman:** ${timeInfo.type === 'fixed' ? 
+                               `Saat ${timeInfo.hour}:${(timeInfo.minute || 0).toString().padStart(2, '0')}'da` : 
+                               `${timeInfo.minutes} dakika sonra`}\n` +
+                           `🎮 **Mod:** ${gameType || 'Belirsiz (emoji ile seçilecek)'}\n\n` +
+                           `⚡ Katılmak için sunucudaki mesaja git!`)
+            .setColor('#9B59B6')
+            .setTimestamp();
+        
+        // Her TFT üyesine DM gönder
+        for (const [userId, member] of tftMembers) {
+            try {
+                await member.send({ embeds: [dmEmbed] });
+                console.log(`✅ DM gönderildi: ${member.user.username}`);
+            } catch (error) {
+                console.log(`❌ DM gönderilemedi: ${member.user.username} (DM kapalı)`);
+            }
+        }
     }
     
+    // Ana mesajı #content-etkinlik-duyuru kanalına at
+    const etkinlikChannel = guild.channels.cache.find(ch => ch.name === 'content-etkinlik-duyuru');
     const embed = createTftEmbed(game);
-    const msg = await message.reply({ content: roleText, embeds: [embed] });
+    
+    let msg;
+    if (etkinlikChannel) {
+        msg = await etkinlikChannel.send({ embeds: [embed] });
+        console.log('✅ TFT oyunu #content-etkinlik-duyuru kanalına atıldı');
+    } else {
+        msg = await message.reply({ embeds: [embed] });
+        console.log('⚠️ #content-etkinlik-duyuru kanalı bulunamadı, reply olarak atıldı');
+    }
     
     game.messageId = msg.id;
     
@@ -104,6 +154,9 @@ async function createTftGame(message) {
     // Geri sayım başlat
     if (timeInfo.type === 'countdown') {
         startCountdown(game, msg);
+    } else if (timeInfo.type === 'fixed') {
+        // Sabit saat için hatırlatma sistemi
+        startFixedTimeReminder(game, guild);
     }
 }
 
@@ -176,20 +229,58 @@ function startCountdown(game, message) {
 async function handleTftReaction(reaction, user, isAdd) {
     if (user.bot) return;
     
-    console.log('🎮 TFT reaction handler çalıştı:', user.username, isAdd ? 'ekleme' : 'çıkarma');
-    console.log('📊 Aktif oyunlar:', activeTftGames.size);
+    // Spam önleme - 3 saniye cooldown
+    const now = Date.now();
+    const cooldownKey = `${user.id}-${reaction.message.id}`;
+    const lastAction = userCooldowns.get(cooldownKey);
     
-    const game = Array.from(activeTftGames.values()).find(g => g.messageId === reaction.message.id);
-    if (!game) {
-        console.log('❌ Oyun bulunamadı, mesaj ID:', reaction.message.id);
+    if (lastAction && now - lastAction < 3000) {
+        console.log(`⏱️ ${user.username} cooldown'da, spam engellendi`);
         return;
     }
     
-    console.log('✅ Oyun bulundu:', game.id);
-    const username = user.username;
+    userCooldowns.set(cooldownKey, now);
+    
+    console.log('🎮 TFT reaction handler çalıştı:', user.username, isAdd ? 'ekleme' : 'çıkarma');
+    
+    const game = Array.from(activeTftGames.values()).find(g => g.messageId === reaction.message.id);
+    if (!game) {
+        console.log('❌ Oyun bulunamadı');
+        return;
+    }
+    
+    const guild = reaction.message.guild;
+    const member = await guild.members.fetch(user.id);
+    const tftRole = guild.roles.cache.find(r => r.name === 'TFT');
+    
+    const oldPlayerCount = game.players.length;
     
     if (isAdd) {
-        // Oyuncu ekle
+        // TFT rolü yoksa ver ve lig'e kaydet
+        if (tftRole && !member.roles.cache.has(tftRole.id)) {
+            try {
+                await member.roles.add(tftRole);
+                console.log(`✅ ${user.username} kullanıcısına TFT rolü verildi`);
+                
+                // TFT lig'ine otomatik kaydet
+                const { getTftLeagueData, saveTftLeagueData } = require('../utils/dataManager');
+                const tftLeagueData = getTftLeagueData();
+                
+                if (!tftLeagueData[user.id]) {
+                    tftLeagueData[user.id] = {
+                        username: user.username,
+                        matches: []
+                    };
+                    saveTftLeagueData();
+                    console.log(`✅ ${user.username} TFT lig'ine kaydedildi`);
+                }
+            } catch (error) {
+                console.error('TFT rol verme hatası:', error);
+            }
+        }
+        
+        // Oyuna ekle
+        const username = user.username;
         if (!game.players.includes(username) && !game.reserves.includes(username)) {
             if (game.players.length < 8) {
                 game.players.push(username);
@@ -199,6 +290,7 @@ async function handleTftReaction(reaction, user, isAdd) {
         }
     } else {
         // Oyuncu çıkar
+        const username = user.username;
         game.players = game.players.filter(p => p !== username);
         game.reserves = game.reserves.filter(p => p !== username);
         
@@ -211,6 +303,47 @@ async function handleTftReaction(reaction, user, isAdd) {
     // Embed güncelle
     const embed = createTftEmbed(game);
     await reaction.message.edit({ embeds: [embed] });
+    
+    // Sadece oyuncu sayısı değiştiyse bildirim gönder
+    const newPlayerCount = game.players.length;
+    if (newPlayerCount !== oldPlayerCount) {
+        const sohbetChannel = guild.channels.cache.find(ch => ch.name === 'sohbet');
+        if (sohbetChannel) {
+            if (newPlayerCount === 8) {
+                await sohbetChannel.send(`🎉 **TFT lobisi doldu!** (8/8)\n✅ Oyun hazır, başlayabilirsiniz!`);
+            } else if (newPlayerCount >= 6) {
+                await sohbetChannel.send(`🔥 **TFT lobisi ${newPlayerCount}/8 oldu!** Neredeyse dolu!`);
+            } else if (newPlayerCount > oldPlayerCount) {
+                await sohbetChannel.send(`🎮 **TFT lobisi ${newPlayerCount}/8 oldu**`);
+            }
+        }
+    }
+}
+
+// Sabit saat için hatırlatma sistemi
+function startFixedTimeReminder(game, guild) {
+    const { hour, minute } = game.timeInfo;
+    const now = new Date();
+    const gameTime = new Date();
+    gameTime.setHours(hour, minute || 0, 0, 0);
+    
+    // Eğer oyun zamanı geçmişse yarına ayarla
+    if (gameTime <= now) {
+        gameTime.setDate(gameTime.getDate() + 1);
+    }
+    
+    const reminderTime = new Date(gameTime.getTime() - 15 * 60 * 1000); // 15 dakika önce
+    const timeUntilReminder = reminderTime.getTime() - now.getTime();
+    
+    if (timeUntilReminder > 0) {
+        setTimeout(async () => {
+            const sohbetChannel = guild.channels.cache.find(ch => ch.name === 'sohbet');
+            if (sohbetChannel && activeTftGames.has(game.id)) {
+                const currentGame = activeTftGames.get(game.id);
+                await sohbetChannel.send(`⏰ **TFT lobisine son 15 dakika!**\n🎮 Oyuncu sayısı: ${currentGame.players.length}/8`);
+            }
+        }, timeUntilReminder);
+    }
 }
 
 module.exports = {

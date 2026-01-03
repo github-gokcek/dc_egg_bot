@@ -8,9 +8,13 @@ async function showHelp(message) {
         .addFields(
             {
                 name: '🎯 **TAKIM OLUŞTURMA (LoL)**',
-                value: '`!vs` - Takım seçim menüsü\n' +
+                value: '`!vs` - Interaktif takım oluşturma menüsü\n' +
+                       '• **Şimdi oynayacaksa:** Oyuncu isimlerini gir\n' +
+                       '• **İleri tarihte:** Emoji ile katılım sistemi\n' +
+                       '• **Kaptanlı mod:** Kaptan seçimi + takım dağılımı\n' +
+                       '• **Rastgele mod:** Otomatik karıştırma\n' +
                        '`!vs-aram-rastgele-@oyuncu1 @oyuncu2...` - Hızlı rastgele\n' +
-                       '`!vs-sihirdar-kaptanli-@oyuncu1 @oyuncu2...` - Kaptanlı seçim\n' +
+                       '`!vs-sihirdar-kaptanli-@oyuncu1 @oyuncu2...` - Hızlı kaptanlı\n' +
                        '`!iptal` - Aktif işlemi iptal et',
                 inline: false
             },
@@ -19,6 +23,8 @@ async function showHelp(message) {
                 value: '`!tft-120-solo` - 120 dakika sonra solo oyun\n' +
                        '`!tft-60-double` - 60 dakika sonra çift oyun\n' +
                        '`!tft-21s-solo` - Saat 21:00\'da solo oyun\n' +
+                       '`!tft-leaderboard` - TFT liderlik tablosu\n' +
+                       '`tft-maç-ID-@oyuncu1-@oyuncu2...` - Maç sonucu\n' +
                        '⚡ Emojiye tıklayarak katıl/ayrıl',
                 inline: false
             },
